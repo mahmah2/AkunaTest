@@ -58,7 +58,7 @@ namespace AkunaTest
         }
     }
 
-    public class OrderCollection : OrderedDictionary //<string, Order>
+    public class OrderCollection : OrderedDictionary
     {
         public void Add(Order order)
         {
@@ -101,45 +101,60 @@ namespace AkunaTest
 
         public IEnumerable<Order> SortByBuyPrice()
         {
-            return this.AsEnumerable().OrderBy(o => o.Type).ThenByDescending(o => o.Price);
-        }
-    }
-
-    public static class OrderMatchingExtensionMethods
-    {
-        public static bool UpdateOrder(this OrderCollection orders, Order updatedOrder)
-        {
-            Order order = orders.Find(updatedOrder.ID);
-
-            if (order!=null && order.Validity!=OrderValidity.IOC)
-            {
-                    order.Update(updatedOrder);
-
-                    //bring the order to the begining of the list
-                    orders.Remove(order.ID);
-                    orders.Add(order);
-
-                    return true;
-            }
-
-            return false;
+            return this.AsEnumerable().OrderByDescending(o => o.Type).ThenByDescending(o => o.Price);
         }
 
-        public static bool CancelOrder(this OrderCollection orders, string cancelledOrderId)
+        public bool UpdateOrder(Order updatedOrder)
         {
-            Order order = orders.Find(cancelledOrderId);
+            Order order = this.Find(updatedOrder.ID);
 
-            if (order != null)
+            if (order != null && order.Validity != OrderValidity.IOC)
             {
-                orders.Remove(cancelledOrderId);
+                order.Update(updatedOrder);
+
+                //bring the order to the begining of the list
+                this.Remove(order.ID);
+                this.Add(order);
 
                 return true;
             }
 
             return false;
         }
-    }
 
+        public bool CancelOrder(string cancelledOrderId)
+        {
+            Order order = this.Find(cancelledOrderId);
+
+            if (order != null)
+            {
+                this.Remove(cancelledOrderId);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        public void MergeOrders(Order firstOrder, Order secondOrder)
+        {
+            if (firstOrder.Quantity - secondOrder.Quantity == 0)
+            {
+                this.Remove(firstOrder.ID);
+                this.Remove(secondOrder.ID);
+            }
+            else if (firstOrder.Quantity - secondOrder.Quantity > 0)
+            {
+                firstOrder.Quantity -= secondOrder.Quantity;
+                this.Remove(secondOrder.ID);
+            }
+            else if (firstOrder.Quantity - secondOrder.Quantity < 0)
+            {
+                secondOrder.Quantity -= firstOrder.Quantity;
+                this.Remove(firstOrder.ID);
+            }
+        }
+    }
 
     public class OrderMatchingEngine
     {
@@ -151,7 +166,7 @@ namespace AkunaTest
         private const string KW_TRADE = "TRADE";
 
 
-        private OrderCollection orders = new OrderCollection(); //we store the orders ordered by updated time
+        private OrderCollection orders = new OrderCollection(); //we store the orders ordered by updated time : newers first, olders last
 
         public delegate void OnOutputMethod(string text);
         public event OnOutputMethod OnOutput;
@@ -191,7 +206,6 @@ namespace AkunaTest
             }
 
             ApplyTrades(orders);
-
         }
 
         private void ApplyTrades(OrderCollection orders)
@@ -200,30 +214,16 @@ namespace AkunaTest
 
             while (FindNextTrade(orders, out firstOrder, out secondOrder))
             {
-                if (firstOrder.Quantity - secondOrder.Quantity == 0)
-                {
-                    orders.Remove(firstOrder.ID);
-                    orders.Remove(secondOrder.ID);
-                }
-                else if (firstOrder.Quantity - secondOrder.Quantity > 0)
-                {
-                    firstOrder.Quantity -= secondOrder.Quantity;
-                    orders.Remove(secondOrder.ID);
-                }
-                else if (firstOrder.Quantity - secondOrder.Quantity < 0)
-                {
-                    secondOrder.Quantity -= firstOrder.Quantity;
-                    orders.Remove(firstOrder.ID);
-                }
+                orders.MergeOrders(firstOrder, secondOrder);
 
                 OnTradeHappened?.Invoke(firstOrder.ID, firstOrder.Price, firstOrder.Quantity,
                                 secondOrder.ID, secondOrder.Price, secondOrder.Quantity);
 
                 OnOutput?.Invoke($"{KW_TRADE} {firstOrder.TradeInfo()} {secondOrder.TradeInfo()}");
             }
-
-
         }
+
+
 
         private bool FindNextTrade(OrderCollection orders, out Order firstOrder, out Order secondOrder)
         {
@@ -237,12 +237,12 @@ namespace AkunaTest
             {
                 if (sortedOrders[i].Type == OrderType.BUY)
                 {
-                    for (int j = sortedOrders.Count()-1 ; j >=0  && j!=i; j--)
+                    for (int j = sortedOrders.Count()-1 ; j>=0  && j!=i; j--)
                     {
                         if (sortedOrders[j].Type == OrderType.SELL &&
                             sortedOrders[j].Price <= sortedOrders[i].Price)
                         {
-                            if (i<j)
+                            if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
                             {
                                 firstOrder = orders.Find(sortedOrders[i].ID);
                                 secondOrder = orders.Find(sortedOrders[j].ID);
@@ -259,11 +259,11 @@ namespace AkunaTest
                 }
                 else //if (orderList[i].Type == OrderType.SELL)
                 {
-                    for (int j = 0; j < sortedOrders.Count() && j != i; j++)
+                    for (int j = sortedOrders.Count()-1; j>0  && j!=i; j++)
                     {
                         if (sortedOrders[j].Type == OrderType.BUY && sortedOrders[j].Price >= sortedOrders[i].Price)
                         {
-                            if (i < j)
+                            if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
                             {
                                 firstOrder = orders.Find(sortedOrders[i].ID);
                                 secondOrder = orders.Find(sortedOrders[j].ID);
