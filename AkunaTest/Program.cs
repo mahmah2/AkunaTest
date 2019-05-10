@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -10,7 +12,7 @@ namespace AkunaTest
     public enum OrderValidity
     {
         GFD,
-        IOC
+        IOC  //TODO : cater for this type of orders
     }
 
     public enum OrderType
@@ -34,7 +36,12 @@ namespace AkunaTest
         }
         public override string ToString()
         {
-            return $"{Type.ToString()} {Validity.ToString()} {Price} {Quantity} {ID}";
+            return $"{ID} {Type.ToString()} {Validity.ToString()} {Price} {Quantity}";
+        }
+
+        public string TradeInfo()
+        {
+            return $"{ID} {Price} {Quantity}";
         }
 
         public override int GetHashCode()
@@ -51,29 +58,50 @@ namespace AkunaTest
         }
     }
 
-    public class OrderCollection : Dictionary<string, Order>
+    public class OrderCollection : OrderedDictionary //<string, Order>
     {
-        public void Àdd(Order order)
+        public void Add(Order order)
         {
             this.Add(order.ID, order);
         }
 
-        public new bool Remove(string id)
+        public bool Remove(string id)
         {
-            if (ContainsKey(id))
-                return base.Remove(id);
+            if (Contains(id))
+            {
+                base.Remove(id);
+                return true;
+            }
             else
                 return false;
         }
 
         public Order Find(string id)
         {
-            return this.ContainsKey(id) ?  this[id] : null;
+            return this.Contains(id) ?  (Order)this[id] : null;
+        }
+
+        public int GetIndex(string id)
+        {
+            for (int i = 0; i < this.Count; i++)
+            {
+                if (((Order)this[i]).ID == id)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         public IEnumerable<Order> AsEnumerable()
         {
-            return this.Select(kvp => kvp.Value);
+            return this.Cast<DictionaryEntry>().Select(d=>(Order)d.Value);
+        }
+
+        public IEnumerable<Order> SortByBuyPrice()
+        {
+            return this.AsEnumerable().OrderBy(o => o.Type).ThenByDescending(o => o.Price);
         }
     }
 
@@ -83,13 +111,13 @@ namespace AkunaTest
         {
             Order order = orders.Find(updatedOrder.ID);
 
-            if (order!=null)
+            if (order!=null && order.Validity!=OrderValidity.IOC)
             {
                     order.Update(updatedOrder);
 
                     //bring the order to the begining of the list
                     orders.Remove(order.ID);
-                    orders.Àdd(order);
+                    orders.Add(order);
 
                     return true;
             }
@@ -120,16 +148,16 @@ namespace AkunaTest
         private const string KW_MODIFY = "MODIFY";
         private const string KW_PRINT = "PRINT";
         private const string KW_CANCEL = "CANCEL";
+        private const string KW_TRADE = "TRADE";
 
 
         private OrderCollection orders = new OrderCollection(); //we store the orders ordered by updated time
 
-        private Action<string> DoOutput;
+        public delegate void OnOutputMethod(string text);
+        public event OnOutputMethod OnOutput;
 
-        public OrderMatchingEngine(Action<string> doOutput)
-        {
-            DoOutput = doOutput;
-        }
+        public delegate void OnTradeHappenedMethod(string Id1, int price1, int quantity1, string order2, int price2, int quantity2);
+        public event OnTradeHappenedMethod OnTradeHappened;
 
         public void Parse(string input)
         {
@@ -140,7 +168,7 @@ namespace AkunaTest
                 case KW_SELL:
                     ParseOrderLine(input);
                     var newOrder = ParseOrderLine(input);
-                    orders.Àdd(newOrder);
+                    orders.Add(newOrder);
                     break;
 
                 case KW_MODIFY:
@@ -162,6 +190,97 @@ namespace AkunaTest
                     break;
             }
 
+            ApplyTrades(orders);
+
+        }
+
+        private void ApplyTrades(OrderCollection orders)
+        {
+            Order firstOrder, secondOrder;
+
+            while (FindNextTrade(orders, out firstOrder, out secondOrder))
+            {
+                if (firstOrder.Quantity - secondOrder.Quantity == 0)
+                {
+                    orders.Remove(firstOrder.ID);
+                    orders.Remove(secondOrder.ID);
+                }
+                else if (firstOrder.Quantity - secondOrder.Quantity > 0)
+                {
+                    firstOrder.Quantity -= secondOrder.Quantity;
+                    orders.Remove(secondOrder.ID);
+                }
+                else if (firstOrder.Quantity - secondOrder.Quantity < 0)
+                {
+                    secondOrder.Quantity -= firstOrder.Quantity;
+                    orders.Remove(firstOrder.ID);
+                }
+
+                OnTradeHappened?.Invoke(firstOrder.ID, firstOrder.Price, firstOrder.Quantity,
+                                secondOrder.ID, secondOrder.Price, secondOrder.Quantity);
+
+                OnOutput?.Invoke($"{KW_TRADE} {firstOrder.TradeInfo()} {secondOrder.TradeInfo()}");
+            }
+
+
+        }
+
+        private bool FindNextTrade(OrderCollection orders, out Order firstOrder, out Order secondOrder)
+        {
+            var sortedOrders = orders.SortByBuyPrice().ToList();
+
+            firstOrder = secondOrder = null;
+
+            //var orderList = orders.AsEnumerable().ToList();
+
+            for (int i = sortedOrders.Count()-1 ; i >= 0  ; i--)
+            {
+                if (sortedOrders[i].Type == OrderType.BUY)
+                {
+                    for (int j = sortedOrders.Count()-1 ; j >=0  && j!=i; j--)
+                    {
+                        if (sortedOrders[j].Type == OrderType.SELL &&
+                            sortedOrders[j].Price <= sortedOrders[i].Price)
+                        {
+                            if (i<j)
+                            {
+                                firstOrder = orders.Find(sortedOrders[i].ID);
+                                secondOrder = orders.Find(sortedOrders[j].ID);
+                            }
+                            else
+                            {
+                                firstOrder = orders.Find(sortedOrders[j].ID);
+                                secondOrder = orders.Find(sortedOrders[i].ID);
+                            }
+
+                            return true;
+                        }
+                    }
+                }
+                else //if (orderList[i].Type == OrderType.SELL)
+                {
+                    for (int j = 0; j < sortedOrders.Count() && j != i; j++)
+                    {
+                        if (sortedOrders[j].Type == OrderType.BUY && sortedOrders[j].Price >= sortedOrders[i].Price)
+                        {
+                            if (i < j)
+                            {
+                                firstOrder = orders.Find(sortedOrders[i].ID);
+                                secondOrder = orders.Find(sortedOrders[j].ID);
+                            }
+                            else
+                            {
+                                firstOrder = orders.Find(sortedOrders[j].ID);
+                                secondOrder = orders.Find(sortedOrders[i].ID);
+                            }
+
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
         }
 
         private string ParseCancelLine(string input)
@@ -244,16 +363,16 @@ namespace AkunaTest
                 }
             }
 
-            DoOutput("SELL:");
+            OnOutput?.Invoke("SELL:");
             foreach (var item in sellPrices)
             {
-                DoOutput($"{item.Key} {item.Value}");
+                OnOutput?.Invoke($"{item.Key} {item.Value}");
             }
 
-            DoOutput("BUY:");
+            OnOutput?.Invoke("BUY:");
             foreach (var item in buyPrices)
             {
-                DoOutput($"{item.Key} {item.Value}");
+                OnOutput?.Invoke($"{item.Key} {item.Value}");
             }
         }
 
@@ -311,12 +430,19 @@ namespace AkunaTest
         {
             string line;
 
-            var engine = new OrderMatchingEngine(s => Console.WriteLine(s));
+            var engine = new OrderMatchingEngine();
+
+            engine.OnOutput += Engine_OnOutput;
 
             while ((line = Console.ReadLine()) != null)
             {
                 engine.Parse(line);
             }
+        }
+
+        private static void Engine_OnOutput(string text)
+        {
+            Console.WriteLine(text);
         }
     }
 }
