@@ -51,19 +51,45 @@ namespace AkunaTest
         }
     }
 
+    public class OrderCollection : Dictionary<string, Order>
+    {
+        public void Àdd(Order order)
+        {
+            this.Add(order.ID, order);
+        }
+
+        public new bool Remove(string id)
+        {
+            if (ContainsKey(id))
+                return base.Remove(id);
+            else
+                return false;
+        }
+
+        public Order Find(string id)
+        {
+            return this.ContainsKey(id) ?  this[id] : null;
+        }
+
+        public IEnumerable<Order> AsEnumerable()
+        {
+            return this.Select(kvp => kvp.Value);
+        }
+    }
+
     public static class OrderMatchingExtensionMethods
     {
-        public static bool UpdateOrder(this HashSet<Order> orders, Order updatedOrder)
+        public static bool UpdateOrder(this OrderCollection orders, Order updatedOrder)
         {
-            Order order;
+            Order order = orders.Find(updatedOrder.ID);
 
-            if (orders.TryGetValue(updatedOrder, out order))
+            if (order!=null)
             {
                     order.Update(updatedOrder);
 
                     //bring the order to the begining of the list
-                    orders.Remove(order);
-                    orders.Add(order);
+                    orders.Remove(order.ID);
+                    orders.Àdd(order);
 
                     return true;
             }
@@ -71,13 +97,14 @@ namespace AkunaTest
             return false;
         }
 
-        public static bool CancelOrder(this HashSet<Order> orders, string cancelledOrderId)
+        public static bool CancelOrder(this OrderCollection orders, string cancelledOrderId)
         {
-            Order order;
+            Order order = orders.Find(cancelledOrderId);
 
-            if (orders.TryGetValue(new Order() { ID = cancelledOrderId } , out order))
+            if (order != null)
             {
-                orders.Remove(order);
+                orders.Remove(cancelledOrderId);
+
                 return true;
             }
 
@@ -95,7 +122,7 @@ namespace AkunaTest
         private const string KW_CANCEL = "CANCEL";
 
 
-        private HashSet<Order> orders = new HashSet<Order>(); //we store the orders ordered by updated time
+        private OrderCollection orders = new OrderCollection(); //we store the orders ordered by updated time
 
         private Action<string> DoOutput;
 
@@ -113,7 +140,7 @@ namespace AkunaTest
                 case KW_SELL:
                     ParseOrderLine(input);
                     var newOrder = ParseOrderLine(input);
-                    orders.Add(newOrder);
+                    orders.Àdd(newOrder);
                     break;
 
                 case KW_MODIFY:
@@ -200,12 +227,12 @@ namespace AkunaTest
                 summary.Add(order.Price, order.Quantity);
         }
 
-        private void PrintPriceBook(IEnumerable<Order> orders)
+        private void PrintPriceBook(OrderCollection orders)
         {
             var sellPrices = new SortedDictionary<int, int>(new DescendingComparer<int>());
             var buyPrices = new SortedDictionary<int, int>(new DescendingComparer<int>());
 
-            foreach (var order in orders)
+            foreach (var order in orders.AsEnumerable())
             {
                 if (order.Type == OrderType.SELL)
                 {
