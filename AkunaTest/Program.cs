@@ -12,7 +12,7 @@ namespace AkunaTest
     public enum OrderValidity
     {
         GFD,
-        IOC  //TODO : cater for this type of orders
+        IOC
     }
 
     public enum OrderType
@@ -39,9 +39,9 @@ namespace AkunaTest
             return $"{ID} {Type.ToString()} {Validity.ToString()} {Price} {Quantity}";
         }
 
-        public string TradeInfo()
+        public string TradeInfo(int tradedQuantity)
         {
-            return $"{ID} {Price} {Quantity}";
+            return $"{ID} {Price} {tradedQuantity}";
         }
     }
 
@@ -242,79 +242,45 @@ namespace AkunaTest
 
             while (FindNextTrade(orders, out firstOrder, out secondOrder))
             {
+                var tradedQuantity = Math.Min(firstOrder.Quantity, secondOrder.Quantity); 
+
                 orders.MergeOrders(firstOrder, secondOrder);
 
-                OnTradeHappened?.Invoke(firstOrder.ID, firstOrder.Price, firstOrder.Quantity,
-                                secondOrder.ID, secondOrder.Price, secondOrder.Quantity);
+                OnTradeHappened?.Invoke(firstOrder.ID, firstOrder.Price, tradedQuantity,
+                                secondOrder.ID, secondOrder.Price, tradedQuantity);
 
-                OnOutput?.Invoke($"{KW_TRADE} {firstOrder.TradeInfo()} {secondOrder.TradeInfo()}");
+                OnOutput?.Invoke($"{KW_TRADE} {firstOrder.TradeInfo(tradedQuantity)} {secondOrder.TradeInfo(tradedQuantity)}");
             }
         }
-
-
 
         private bool FindNextTrade(OrderCollection orders, out Order firstOrder, out Order secondOrder)
         {
             firstOrder = secondOrder = null;
 
+            var sortedBuys = orders.SortedBuys().ToList();
+            var sortedSells = orders.SortedSells().ToList();
+
+            if (sortedBuys.Count == 0 || sortedSells.Count == 0)
+                return false;
+
+
             try
             {
-                //var sortedOrders = orders.SortByBuyPrice().ToList();
-                var sortedBuys = orders.SortedBuys();
-                var sortedSells = orders.SortedSells();
+                var maxBuy = sortedBuys[0];
+                var minSell = sortedSells[0];
 
-
-
-                //var orderList = orders.AsEnumerable().ToList();
-
-                for (int i = sortedOrders.Count()-1 ; i >= 0  ; i--)
+                if (orders.GetIndex(maxBuy.ID) < orders.GetIndex(minSell.ID)) //earlier orders have lower index
                 {
-                    if (sortedOrders[i].Type == OrderType.BUY)
-                    {
-                        for (int j = sortedOrders.Count()-1 ; j>=0  && j!=i; j--)
-                        {
-                            if (sortedOrders[j].Type == OrderType.SELL &&
-                                sortedOrders[j].Price <= sortedOrders[i].Price)
-                            {
-                                if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
-                                {
-                                    firstOrder = orders.Find(sortedOrders[i].ID);
-                                    secondOrder = orders.Find(sortedOrders[j].ID);
-                                }
-                                else
-                                {
-                                    firstOrder = orders.Find(sortedOrders[j].ID);
-                                    secondOrder = orders.Find(sortedOrders[i].ID);
-                                }
-
-                                return true;
-                            }
-                        }
-                    }
-                    else //if (orderList[i].Type == OrderType.SELL)
-                    {
-                        for (int j = sortedOrders.Count()-1; j>0  && j!=i; j++)
-                        {
-                            if (sortedOrders[j].Type == OrderType.BUY && sortedOrders[j].Price >= sortedOrders[i].Price)
-                            {
-                                if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
-                                {
-                                    firstOrder = orders.Find(sortedOrders[i].ID);
-                                    secondOrder = orders.Find(sortedOrders[j].ID);
-                                }
-                                else
-                                {
-                                    firstOrder = orders.Find(sortedOrders[j].ID);
-                                    secondOrder = orders.Find(sortedOrders[i].ID);
-                                }
-
-                                return true;
-                            }
-                        }
-                    }
+                    firstOrder = maxBuy;
+                    secondOrder = minSell;
+                }
+                else
+                {
+                    firstOrder = minSell;
+                    secondOrder = maxBuy;
                 }
 
-                return false;
+                return true;
             }
             catch (Exception ex)
             {
