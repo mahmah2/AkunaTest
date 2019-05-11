@@ -87,6 +87,36 @@ namespace AkunaUnitTest
             Assert.AreEqual("TRADE order1 1000 5 order3 1000 5",
                 engine.DebugOutput[engine.DebugOutput.Count - 1], "Case0140");
 
+            engine.Reset();
+
+            engine.Parse("BUY GFD 1000 10 order1");
+            engine.Parse("BUY GFD 1001 10 order2");
+            engine.Parse("SELL IOC 1000 15 order3");
+            engine.Parse("SELL GFD 1000 15 order4");
+
+            Assert.AreEqual("TRADE order2 1001 10 order3 1000 10",
+                engine.DebugOutput[engine.DebugOutput.Count - 3], "Case0150");
+            Assert.AreEqual("TRADE order1 1000 5 order3 1000 5",
+                engine.DebugOutput[engine.DebugOutput.Count - 2], "Case0160");
+            Assert.AreEqual("TRADE order1 1000 5 order4 1000 5",
+                engine.DebugOutput[engine.DebugOutput.Count - 1], "Case0170");
+            
+
+
+            engine.Reset();
+
+            engine.Parse("BUY GFD 1000 10 order1");
+            engine.Parse("SELL IOC 900 15 order4");
+            engine.Parse("BUY GFD 1001 10 order2");
+            engine.Parse("BUY GFD 1004 10 order3");
+            engine.Parse("SELL GFD 1000 15 order5");
+
+            Assert.AreEqual("TRADE order1 1000 10 order4 900 10",
+                engine.DebugOutput[engine.DebugOutput.Count - 3], "Case0180");
+            Assert.AreEqual("TRADE order3 1004 10 order5 1000 10",
+                engine.DebugOutput[engine.DebugOutput.Count - 2], "Case0190");
+            Assert.AreEqual("TRADE order2 1001 5 order5 1000 5",
+                engine.DebugOutput[engine.DebugOutput.Count - 1], "Case0200");
         }
 
         [TestMethod]

@@ -57,7 +57,7 @@ namespace AkunaTest
     {
         public void Add(Order order)
         {
-            if (order!=null)
+            if (order != null)
                 Add(order.ID, order);
         }
 
@@ -74,7 +74,7 @@ namespace AkunaTest
 
         public Order Find(string id)
         {
-            return this.Contains(id) ?  (Order)this[id] : null;
+            return this.Contains(id) ? (Order)this[id] : null;
         }
 
         public int GetIndex(string id)
@@ -92,7 +92,7 @@ namespace AkunaTest
 
         public IEnumerable<Order> AsEnumerable()
         {
-            return this.Cast<DictionaryEntry>().Select(d=>(Order)d.Value);
+            return this.Cast<DictionaryEntry>().Select(d => (Order)d.Value);
         }
 
         public IEnumerable<Order> SortByBuyPrice()
@@ -102,7 +102,7 @@ namespace AkunaTest
 
         public IEnumerable<Order> SortedBuys()
         {
-            return this.AsEnumerable().Where(o=>o.Type==OrderType.BUY).OrderByDescending(o => o.Price);
+            return this.AsEnumerable().Where(o => o.Type == OrderType.BUY).OrderByDescending(o => o.Price);
         }
 
         public IEnumerable<Order> SortedSells()
@@ -112,7 +112,7 @@ namespace AkunaTest
 
         public bool UpdateOrder(Order updatedOrder)
         {
-            if (updatedOrder.Quantity <=0 || updatedOrder.Price<=0)
+            if (updatedOrder.Quantity <= 0 || updatedOrder.Price <= 0)
                 return false;
 
             Order order = this.Find(updatedOrder.ID);
@@ -205,15 +205,17 @@ namespace AkunaTest
                 case KW_SELL:
                     var newOrder = ParseOrderLine(input);
 
-                    if (newOrder!=null)
+                    if (newOrder != null)
                     {
                         orders.Add(newOrder);
+
+                        if (newOrder.Validity == OrderValidity.IOC)
+                        {
+                            lastIOCOrder = newOrder;
+                        }
                     }
 
-                    if (newOrder.Validity == OrderValidity.IOC)
-                    {
-                        lastIOCOrder = newOrder;
-                    }
+
 
                     break;
 
@@ -238,9 +240,9 @@ namespace AkunaTest
 
             ApplyTrades(orders);
 
-            if (lastIOCOrder != null && orders.Find(lastIOCOrder.ID)!=null)
+            if (lastIOCOrder != null && orders.Find(lastIOCOrder.ID) != null)
             {
-                orders.Remove(lastIOCOrder);
+                orders.CancelOrder(lastIOCOrder.ID);
             }
         }
 
@@ -250,7 +252,7 @@ namespace AkunaTest
 
             while (FindNextTrade(orders, out firstOrder, out secondOrder))
             {
-                var tradedQuantity = Math.Min(firstOrder.Quantity, secondOrder.Quantity); 
+                var tradedQuantity = Math.Min(firstOrder.Quantity, secondOrder.Quantity);
 
                 orders.MergeOrders(firstOrder, secondOrder);
 
@@ -354,7 +356,7 @@ namespace AkunaTest
             }
         }
 
-        private void AddToOrderSummary(Order order, SortedDictionary<int,int> summary)
+        private void AddToOrderSummary(Order order, SortedDictionary<int, int> summary)
         {
             if (summary.ContainsKey(order.Price))
                 summary[order.Price] += order.Quantity;
@@ -399,7 +401,7 @@ namespace AkunaTest
                 string pattern = @"(?<OrderType>\w+) (?<Validity>\w+) (?<Price>\d+) (?<Quantity>\d+) (?<OrderName>\w+)";
                 MatchCollection matches = Regex.Matches(input, pattern);
 
-                if(matches.Count > 0 )
+                if (matches.Count > 0)
                 {
                     Match match = matches[0];
                     var orderType = match.Groups["OrderType"].Value;
@@ -408,7 +410,8 @@ namespace AkunaTest
                     var quantity = match.Groups["Quantity"].Value;
                     var orderName = match.Groups["OrderName"].Value;
 
-                    var result = new Order() {
+                    var result = new Order()
+                    {
                         Type = (OrderType)Enum.Parse(typeof(OrderType), orderType),
                         Validity = (OrderValidity)Enum.Parse(typeof(OrderValidity), orderValidity),
                         Price = int.Parse(price),
@@ -416,7 +419,7 @@ namespace AkunaTest
                         ID = orderName,
                     };
 
-                    if (result.Price<=0 || result.Quantity<=0)
+                    if (result.Price <= 0 || result.Quantity <= 0)
                     {
                         return null;
                     }
@@ -426,7 +429,7 @@ namespace AkunaTest
 
                 return null;
             }
-            catch 
+            catch
             {
                 return null;
             }
@@ -435,8 +438,8 @@ namespace AkunaTest
         private string FindKeyword(string input)
         {
             var result = string.Empty;
-            
-            for(var i = 0; i <input.Length && input[i] != ' '; i++)
+
+            for (var i = 0; i < input.Length && input[i] != ' '; i++)
             {
                 result += new string(new char[] { input[i] });
             }
