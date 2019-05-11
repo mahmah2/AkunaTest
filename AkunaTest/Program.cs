@@ -112,7 +112,7 @@ namespace AkunaTest
 
         public bool UpdateOrder(Order updatedOrder)
         {
-            if (updatedOrder.Quantity <= 0 || updatedOrder.Price <= 0)
+            if (updatedOrder==null ||  updatedOrder.Quantity <= 0 || updatedOrder.Price <= 0)
                 return false;
 
             Order order = this.Find(updatedOrder.ID);
@@ -121,7 +121,7 @@ namespace AkunaTest
             {
                 order.Update(updatedOrder);
 
-                //bring the order to the begining of the list
+                //bring the order to the end of the list
                 this.Remove(order.ID);
                 this.Add(order);
 
@@ -214,9 +214,6 @@ namespace AkunaTest
                             lastIOCOrder = newOrder;
                         }
                     }
-
-
-
                     break;
 
                 case KW_MODIFY:

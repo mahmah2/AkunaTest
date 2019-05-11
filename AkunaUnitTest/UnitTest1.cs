@@ -117,6 +117,17 @@ namespace AkunaUnitTest
                 engine.DebugOutput[engine.DebugOutput.Count - 2], "Case0190");
             Assert.AreEqual("TRADE order2 1001 5 order5 1000 5",
                 engine.DebugOutput[engine.DebugOutput.Count - 1], "Case0200");
+
+            engine.Reset();
+
+            engine.Parse("BUY GFD 1000 25 order1");
+            engine.Parse("SELL IOC 900 15 order4");
+            engine.Parse("BUY GFD 1001 10 order2");
+            engine.Parse("BUY GFD 1004 10 order3");
+            engine.Parse("MODIFY order1 BUY 1005 10");
+            engine.Parse("SELL GFD 1000 15 order5");
+
+
         }
 
         [TestMethod]
