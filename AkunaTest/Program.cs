@@ -43,11 +43,6 @@ namespace AkunaTest
         {
             return $"{ID} {Price} {Quantity}";
         }
-
-        public override int GetHashCode()
-        {
-            return ID.GetHashCode();
-        }
     }
 
     public class DescendingComparer<T> : IComparer<T> where T : IComparable<T>
@@ -102,6 +97,16 @@ namespace AkunaTest
         public IEnumerable<Order> SortByBuyPrice()
         {
             return this.AsEnumerable().OrderByDescending(o => o.Type).ThenByDescending(o => o.Price);
+        }
+
+        public IEnumerable<Order> SortedBuys()
+        {
+            return this.AsEnumerable().Where(o=>o.Type==OrderType.BUY).OrderByDescending(o => o.Price);
+        }
+
+        public IEnumerable<Order> SortedSells()
+        {
+            return this.AsEnumerable().Where(o => o.Type == OrderType.SELL).OrderBy(o => o.Price);
         }
 
         public bool UpdateOrder(Order updatedOrder)
@@ -166,6 +171,16 @@ namespace AkunaTest
         private const string KW_TRADE = "TRADE";
 
 
+        public OrderMatchingEngine()
+        {
+            OnOutput += OrderMatchingEngine_OnOutput;
+        }
+
+        private void OrderMatchingEngine_OnOutput(string text)
+        {
+            DebugOutput.Add(text);
+        }
+
         private OrderCollection orders = new OrderCollection(); //we store the orders ordered by updated time : newers first, olders last
 
         public delegate void OnOutputMethod(string text);
@@ -173,17 +188,25 @@ namespace AkunaTest
 
         public delegate void OnTradeHappenedMethod(string Id1, int price1, int quantity1, string order2, int price2, int quantity2);
         public event OnTradeHappenedMethod OnTradeHappened;
+        public List<string> DebugOutput = new List<string>();
+
 
         public void Parse(string input)
         {
+            var lastIOCOrder = (Order)null;
             var keyword = FindKeyword(input);
             switch (keyword)
             {
                 case KW_BUY:
                 case KW_SELL:
-                    ParseOrderLine(input);
                     var newOrder = ParseOrderLine(input);
                     orders.Add(newOrder);
+
+                    if (newOrder.Validity == OrderValidity.IOC)
+                    {
+                        lastIOCOrder = newOrder;
+                    }
+
                     break;
 
                 case KW_MODIFY:
@@ -206,6 +229,11 @@ namespace AkunaTest
             }
 
             ApplyTrades(orders);
+
+            if (lastIOCOrder != null && orders.Find(lastIOCOrder.ID)!=null)
+            {
+                orders.Remove(lastIOCOrder);
+            }
         }
 
         private void ApplyTrades(OrderCollection orders)
@@ -227,60 +255,74 @@ namespace AkunaTest
 
         private bool FindNextTrade(OrderCollection orders, out Order firstOrder, out Order secondOrder)
         {
-            var sortedOrders = orders.SortByBuyPrice().ToList();
-
             firstOrder = secondOrder = null;
 
-            //var orderList = orders.AsEnumerable().ToList();
-
-            for (int i = sortedOrders.Count()-1 ; i >= 0  ; i--)
+            try
             {
-                if (sortedOrders[i].Type == OrderType.BUY)
-                {
-                    for (int j = sortedOrders.Count()-1 ; j>=0  && j!=i; j--)
-                    {
-                        if (sortedOrders[j].Type == OrderType.SELL &&
-                            sortedOrders[j].Price <= sortedOrders[i].Price)
-                        {
-                            if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
-                            {
-                                firstOrder = orders.Find(sortedOrders[i].ID);
-                                secondOrder = orders.Find(sortedOrders[j].ID);
-                            }
-                            else
-                            {
-                                firstOrder = orders.Find(sortedOrders[j].ID);
-                                secondOrder = orders.Find(sortedOrders[i].ID);
-                            }
+                //var sortedOrders = orders.SortByBuyPrice().ToList();
+                var sortedBuys = orders.SortedBuys();
+                var sortedSells = orders.SortedSells();
 
-                            return true;
+
+
+                //var orderList = orders.AsEnumerable().ToList();
+
+                for (int i = sortedOrders.Count()-1 ; i >= 0  ; i--)
+                {
+                    if (sortedOrders[i].Type == OrderType.BUY)
+                    {
+                        for (int j = sortedOrders.Count()-1 ; j>=0  && j!=i; j--)
+                        {
+                            if (sortedOrders[j].Type == OrderType.SELL &&
+                                sortedOrders[j].Price <= sortedOrders[i].Price)
+                            {
+                                if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
+                                {
+                                    firstOrder = orders.Find(sortedOrders[i].ID);
+                                    secondOrder = orders.Find(sortedOrders[j].ID);
+                                }
+                                else
+                                {
+                                    firstOrder = orders.Find(sortedOrders[j].ID);
+                                    secondOrder = orders.Find(sortedOrders[i].ID);
+                                }
+
+                                return true;
+                            }
+                        }
+                    }
+                    else //if (orderList[i].Type == OrderType.SELL)
+                    {
+                        for (int j = sortedOrders.Count()-1; j>0  && j!=i; j++)
+                        {
+                            if (sortedOrders[j].Type == OrderType.BUY && sortedOrders[j].Price >= sortedOrders[i].Price)
+                            {
+                                if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
+                                {
+                                    firstOrder = orders.Find(sortedOrders[i].ID);
+                                    secondOrder = orders.Find(sortedOrders[j].ID);
+                                }
+                                else
+                                {
+                                    firstOrder = orders.Find(sortedOrders[j].ID);
+                                    secondOrder = orders.Find(sortedOrders[i].ID);
+                                }
+
+                                return true;
+                            }
                         }
                     }
                 }
-                else //if (orderList[i].Type == OrderType.SELL)
-                {
-                    for (int j = sortedOrders.Count()-1; j>0  && j!=i; j++)
-                    {
-                        if (sortedOrders[j].Type == OrderType.BUY && sortedOrders[j].Price >= sortedOrders[i].Price)
-                        {
-                            if (orders.GetIndex(sortedOrders[i].ID) < orders.GetIndex(sortedOrders[j].ID))
-                            {
-                                firstOrder = orders.Find(sortedOrders[i].ID);
-                                secondOrder = orders.Find(sortedOrders[j].ID);
-                            }
-                            else
-                            {
-                                firstOrder = orders.Find(sortedOrders[j].ID);
-                                secondOrder = orders.Find(sortedOrders[i].ID);
-                            }
 
-                            return true;
-                        }
-                    }
-                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+
+                return false;
             }
 
-            return false;
         }
 
         private string ParseCancelLine(string input)
@@ -419,6 +461,12 @@ namespace AkunaTest
             }
 
             return result;
+        }
+
+        public void Reset()
+        {
+            orders.Clear();
+            DebugOutput.Clear();
         }
     }
 
