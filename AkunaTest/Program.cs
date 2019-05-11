@@ -57,7 +57,8 @@ namespace AkunaTest
     {
         public void Add(Order order)
         {
-            this.Add(order.ID, order);
+            if (order!=null)
+                Add(order.ID, order);
         }
 
         public bool Remove(string id)
@@ -111,6 +112,9 @@ namespace AkunaTest
 
         public bool UpdateOrder(Order updatedOrder)
         {
+            if (updatedOrder.Quantity <=0 || updatedOrder.Price<=0)
+                return false;
+
             Order order = this.Find(updatedOrder.ID);
 
             if (order != null && order.Validity != OrderValidity.IOC)
@@ -200,7 +204,11 @@ namespace AkunaTest
                 case KW_BUY:
                 case KW_SELL:
                     var newOrder = ParseOrderLine(input);
-                    orders.Add(newOrder);
+
+                    if (newOrder!=null)
+                    {
+                        orders.Add(newOrder);
+                    }
 
                     if (newOrder.Validity == OrderValidity.IOC)
                     {
@@ -400,13 +408,20 @@ namespace AkunaTest
                     var quantity = match.Groups["Quantity"].Value;
                     var orderName = match.Groups["OrderName"].Value;
 
-                    return new Order() {
+                    var result = new Order() {
                         Type = (OrderType)Enum.Parse(typeof(OrderType), orderType),
                         Validity = (OrderValidity)Enum.Parse(typeof(OrderValidity), orderValidity),
                         Price = int.Parse(price),
                         Quantity = int.Parse(quantity),
                         ID = orderName,
                     };
+
+                    if (result.Price<=0 || result.Quantity<=0)
+                    {
+                        return null;
+                    }
+
+                    return result;
                 }
 
                 return null;
