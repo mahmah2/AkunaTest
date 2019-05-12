@@ -95,11 +95,6 @@ namespace AkunaTest
             return this.Cast<DictionaryEntry>().Select(d => (Order)d.Value);
         }
 
-        public IEnumerable<Order> SortByBuyPrice()
-        {
-            return this.AsEnumerable().OrderByDescending(o => o.Type).ThenByDescending(o => o.Price);
-        }
-
         public IEnumerable<Order> SortedBuys()
         {
             return this.AsEnumerable().Where(o => o.Type == OrderType.BUY).OrderByDescending(o => o.Price);
@@ -275,6 +270,13 @@ namespace AkunaTest
             {
                 var maxBuy = sortedBuys[0];
                 var minSell = sortedSells[0];
+
+                if (maxBuy.Price < minSell.Price)
+                {
+                    //we don't have a match at all in this situation
+                    return false;
+                }
+
 
                 if (orders.GetIndex(maxBuy.ID) < orders.GetIndex(minSell.ID)) //earlier orders have lower index
                 {

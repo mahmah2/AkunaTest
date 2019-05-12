@@ -118,6 +118,7 @@ namespace AkunaUnitTest
             Assert.AreEqual("TRADE order2 1001 5 order5 1000 5",
                 engine.DebugOutput[engine.DebugOutput.Count - 1], "Case0200");
 
+            //TradeTest8.txt
             engine.Reset();
 
             engine.Parse("BUY GFD 1000 25 order1");
@@ -126,6 +127,63 @@ namespace AkunaUnitTest
             engine.Parse("BUY GFD 1004 10 order3");
             engine.Parse("MODIFY order1 BUY 1005 10");
             engine.Parse("SELL GFD 1000 15 order5");
+            engine.Parse("PRINT");
+
+            Assert.AreEqual("TRADE order1 1000 15 order4 900 15",
+                engine.DebugOutput[0], "Case0210");
+            Assert.AreEqual("TRADE order1 1005 10 order5 1000 10",
+                engine.DebugOutput[1], "Case0220");
+            Assert.AreEqual("TRADE order3 1004 5 order5 1000 5",
+                engine.DebugOutput[2], "Case0230");
+            Assert.AreEqual("SELL:",
+                engine.DebugOutput[3], "Case0240");
+            Assert.AreEqual("BUY:",
+                engine.DebugOutput[4], "Case0250");
+            Assert.AreEqual("1004 5",
+                engine.DebugOutput[5], "Case0260");
+            Assert.AreEqual("1001 10",
+                engine.DebugOutput[6], "Case0270");
+
+            //TradeTest9.txt
+            engine.Reset();
+
+            engine.Parse("BUY GFD 1000 6 order1");
+            engine.Parse("BUY GFD 1001 5 order2");
+            engine.Parse("BUY GFD 1004 5 order3");
+            engine.Parse("SELL IOC 900 15 order4");
+            engine.Parse("MODIFY order1 BUY 1005 5");
+            engine.Parse("SELL GFD 1000 15 order5");
+            engine.Parse("BUY GFD 1006 5 order7");
+            engine.Parse("BUY GFD 800 5 order8");
+            engine.Parse("PRINT");
+
+            Assert.AreEqual("TRADE order3 1004 5 order4 900 5",
+                engine.DebugOutput[0], "Case0280");
+            Assert.AreEqual("TRADE order2 1001 5 order4 900 5",
+                engine.DebugOutput[1], "Case0290");
+            Assert.AreEqual("TRADE order1 1000 5 order4 900 5",
+                engine.DebugOutput[2], "Case0300");
+            Assert.AreEqual("TRADE order1 1005 5 order5 1000 5",
+                engine.DebugOutput[3], "Case0310");
+            Assert.AreEqual("TRADE order5 1000 5 order7 1006 5",
+                engine.DebugOutput[4], "Case0320");
+            Assert.AreEqual("1000 5",
+                engine.DebugOutput[6], "Case0330");
+            Assert.AreEqual("800 5",
+                engine.DebugOutput[8], "Case0340");
+
+
+            //TradeTest10.txt
+            engine.Reset();
+
+            engine.Parse("SELL GFD 1000 5 order5");
+            engine.Parse("BUY GFD 800 5 order8");
+            engine.Parse("PRINT");
+
+            Assert.AreEqual("1000 5",
+                engine.DebugOutput[1], "Case0350");
+            Assert.AreEqual("800 5",
+                engine.DebugOutput[3], "Case0360");
 
 
         }
